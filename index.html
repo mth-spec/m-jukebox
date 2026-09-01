@@ -13,127 +13,262 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
       min-height: 100vh;
       margin: 0;
+      padding: 20px;
     }
 
     /* ジュークボックス風のカード枠 */
     .jukebox-card {
       background: #1e1e1e;
-      border: 2px solid #ff007f; /* ネオンピンクの枠線 */
+      border: 2px solid #ff007f;
       box-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
       border-radius: 16px;
       padding: 24px;
       text-align: center;
-      width: 90%;
+      width: 100%;
       max-width: 500px;
     }
 
-    /* 「再生中」のタイトル */
     .now-playing {
-      color: #00f3ff; /* ネオンブルー */
+      color: #00f3ff;
       font-weight: bold;
       font-size: 1.2rem;
       margin-bottom: 16px;
     }
 
-    /* --- ここから下はリスト表示用の追加スタイル --- */
+    /* プレイヤー部分 */
+    .player-area {
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #2a2a2a;
+      border-radius: 12px;
+      border: 1px solid #00f3ff;
+    }
+
+    #play-button {
+      background: #00f3ff;
+      color: #121212;
+      border: none;
+      padding: 12px 24px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      border-radius: 25px;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0, 243, 255, 0.5);
+      transition: transform 0.2s;
+    }
+
+    #play-button:hover {
+      transform: scale(1.05);
+    }
+
+    /* リスト部分 */
     .playlist-container {
       list-style: none;
       padding: 0;
       margin: 0;
       text-align: left;
+      max-height: 300px;
+      overflow-y: auto;
     }
 
     .playlist-item {
       background-color: #2a2a2a;
-      margin-bottom: 12px;
-      padding: 12px 16px;
+      margin-bottom: 8px;
+      padding: 10px;
       border-radius: 8px;
-      border-left: 4px solid #00f3ff;
-      transition: transform 0.2s, box-shadow 0.2s;
+      border-left: 4px solid #555;
+      font-size: 0.9rem;
     }
 
-    .playlist-item:hover {
-      transform: translateX(4px);
-      box-shadow: -4px 0 10px rgba(0, 243, 255, 0.3);
-      border-left-color: #ff007f;
+    .playlist-item.active {
+      border-left: 4px solid #ff007f;
+      background-color: #3a1a2a;
     }
 
     .playlist-item a {
       color: #ffffff;
       text-decoration: none;
-      display: block;
-      font-size: 0.95rem;
       word-break: break-all;
     }
 
     .badge {
       display: inline-block;
-      padding: 2px 8px;
+      padding: 2px 6px;
       border-radius: 12px;
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       font-weight: bold;
       margin-bottom: 4px;
     }
     .badge.youtube { background: #ff0000; color: #fff; }
     .badge.suno-mp3 { background: #ff007f; color: #fff; }
   </style>
+  <!-- YouTubeの制御用APIを読み込む -->
+  <script src="https://www.youtube.com/iframe_api"></script>
 </head>
 <body>
 
   <div class="jukebox-card">
     <div class="now-playing">🎵 Jukebox Playlist 🎵</div>
+    
+    <!-- 追加：プレイヤー画面 -->
+    <div class="player-area">
+      <button id="play-button">▶ ランダム再生スタート</button>
+      <div id="media-container" style="display: none; width: 100%;">
+        <p id="now-playing-text" style="font-size: 0.9rem; margin-bottom: 10px; color: #ff007f;"></p>
+        <div id="yt-player"></div>
+        <audio id="audio-player" controls style="display: none; width: 100%;"></audio>
+      </div>
+    </div>
+
+    <!-- リスト表示 -->
     <ul id="playlist" class="playlist-container">
-      <!-- ここにJavaScriptで曲データが追加されます -->
       <li style="text-align:center; color:#888;">Now Loading...</li>
     </ul>
   </div>
 
   <script>
-    // GitHub Actionsで作成した playlist.json を読み込む
+    let rawPlaylist = [];
+    let shuffledPlaylist = [];
+    let currentIndex = 0;
+    let ytPlayerInstance = null;
+
+    // URLからYouTubeのIDを取り出す関数
+    function getYTId(url) {
+      const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+      return match ? match[1] : null;
+    }
+
+    // 配列をシャッフルする関数
+    function shuffle(array) {
+      let currentIndex = array.length, randomIndex;
+      while (currentIndex !== 0) {
+        randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex--;
+        [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+      }
+      return array;
+    }
+
+    // JSONを読み込む
     async function loadPlaylist() {
       const playlistElement = document.getElementById('playlist');
-      
       try {
-        // キャッシュを防ぐためにタイムスタンプを付与
         const response = await fetch(`playlist.json?t=${new Date().getTime()}`);
         if (!response.ok) throw new Error('Network response was not ok');
-        
-        const data = await response.json();
-        playlistElement.innerHTML = ''; // Loadingの文字を消す
+        rawPlaylist = await response.json();
+        playlistElement.innerHTML = ''; 
 
-        if (data.length === 0) {
+        if (rawPlaylist.length === 0) {
           playlistElement.innerHTML = '<li style="text-align:center; color:#888;">No tracks found</li>';
           return;
         }
 
-        // 新しい曲が上に来るように逆順でループ
-        data.reverse().forEach(track => {
+        // リスト描画（新しい順）
+        [...rawPlaylist].reverse().forEach((track, index) => {
           const li = document.createElement('li');
           li.className = 'playlist-item';
-          
+          li.id = `track-${track.added_at}`;
           const badgeClass = track.type === 'youtube' ? 'youtube' : 'suno-mp3';
           const badgeText = track.type === 'youtube' ? 'YouTube' : 'Suno/MP3';
-
-          li.innerHTML = `
-            <span class="badge ${badgeClass}">${badgeText}</span>
-            <a href="${track.url}" target="_blank" rel="noopener noreferrer">${track.url}</a>
-          `;
-          
+          li.innerHTML = `<span class="badge ${badgeClass}">${badgeText}</span> <br><a href="${track.url}" target="_blank">${track.url}</a>`;
           playlistElement.appendChild(li);
         });
 
       } catch (error) {
-        console.error('Error fetching playlist:', error);
         playlistElement.innerHTML = '<li style="text-align:center; color:#ff007f;">Error loading playlist.</li>';
       }
     }
 
-    // 画面が読み込まれたら実行
+    // ランダム再生を開始・次の曲へ
+    function playNext() {
+      // 最後までいったら再度シャッフルしてリピート
+      if (currentIndex >= shuffledPlaylist.length) {
+        shuffledPlaylist = shuffle([...rawPlaylist]);
+        currentIndex = 0;
+      }
+
+      const track = shuffledPlaylist[currentIndex];
+      document.getElementById('now-playing-text').innerText = "🎶 Now Playing...";
+      
+      // リストのハイライトを更新
+      document.querySelectorAll('.playlist-item').forEach(el => el.classList.remove('active'));
+      const activeLi = document.getElementById(`track-${track.added_at}`);
+      if(activeLi) {
+        activeLi.classList.add('active');
+        activeLi.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+
+      const audioPlayer = document.getElementById('audio-player');
+      const ytContainer = document.getElementById('yt-player');
+
+      if (track.type === 'youtube') {
+        audioPlayer.style.display = 'none';
+        audioPlayer.pause();
+        ytContainer.style.display = 'block';
+        
+        const ytId = getYTId(track.url);
+        if (ytPlayerInstance) {
+          ytPlayerInstance.loadVideoById(ytId);
+        } else {
+          ytPlayerInstance = new YT.Player('yt-player', {
+            height: '200',
+            width: '100%',
+            videoId: ytId,
+            playerVars: { 'autoplay': 1, 'controls': 1 },
+            events: {
+              'onReady': (event) => event.target.playVideo(),
+              'onStateChange': (event) => {
+                // 再生終了したら次の曲へ
+                if (event.data === YT.PlayerState.ENDED) {
+                  currentIndex++;
+                  playNext();
+                }
+              },
+              'onError': () => {
+                // エラー時（再生不可の動画など）はスキップ
+                currentIndex++;
+                playNext();
+              }
+            }
+          });
+        }
+      } else {
+        // MP3の場合
+        if (ytPlayerInstance) {
+          ytPlayerInstance.stopVideo();
+          document.getElementById('yt-player').style.display = 'none';
+        }
+        audioPlayer.style.display = 'block';
+        audioPlayer.src = track.url;
+        audioPlayer.play().catch(e => {
+          // ブラウザ制限などで再生できなかった場合は3秒後にスキップ
+          setTimeout(() => { currentIndex++; playNext(); }, 3000);
+        });
+        
+        audioPlayer.onended = () => {
+          currentIndex++;
+          playNext();
+        };
+      }
+    }
+
+    // ボタンを押したらランダムスタート
+    document.getElementById('play-button').addEventListener('click', () => {
+      if (rawPlaylist.length === 0) return alert("曲がありません！Issueから追加してください。");
+      
+      document.getElementById('play-button').style.display = 'none';
+      document.getElementById('media-container').style.display = 'block';
+      
+      // リストをシャッフルしてスタート
+      shuffledPlaylist = shuffle([...rawPlaylist]);
+      currentIndex = 0;
+      playNext();
+    });
+
+    // 画面読み込み時にデータ取得
     document.addEventListener('DOMContentLoaded', loadPlaylist);
   </script>
-
 </body>
 </html>
