@@ -140,6 +140,17 @@
       return match ? match[1] : null;
     }
 
+    // 【追加】SunoのURLから直接MP3のURLを生成する関数
+    function getSunoMp3Url(url) {
+      // https://suno.com/s/ID や https://suno.com/song/ID からIDを抽出
+      const match = url.match(/suno\.com\/(?:s|song)\/([a-zA-Z0-9\-]+)/);
+      if (match) {
+        const id = match[1];
+        return `https://cdn1.suno.ai/${id}.mp3`; // SunoのMP3サーバーのURLに変換
+      }
+      return url; // 変換できない場合はそのまま返す
+    }
+
     // 配列をシャッフルする関数
     function shuffle(array) {
       let currentIndex = array.length, randomIndex;
@@ -171,7 +182,7 @@
           li.className = 'playlist-item';
           li.id = `track-${track.added_at}`;
           const badgeClass = track.type === 'youtube' ? 'youtube' : 'suno-mp3';
-          const badgeText = track.type === 'youtube' ? 'YouTube' : 'Suno/MP3';
+          const badgeText = track.type === 'youtube' ? 'YouTube' : 'Suno';
           li.innerHTML = `<span class="badge ${badgeClass}">${badgeText}</span> <br><a href="${track.url}" target="_blank">${track.url}</a>`;
           playlistElement.appendChild(li);
         });
@@ -183,7 +194,6 @@
 
     // ランダム再生を開始・次の曲へ
     function playNext() {
-      // 最後までいったら再度シャッフルしてリピート
       if (currentIndex >= shuffledPlaylist.length) {
         shuffledPlaylist = shuffle([...rawPlaylist]);
         currentIndex = 0;
@@ -192,7 +202,6 @@
       const track = shuffledPlaylist[currentIndex];
       document.getElementById('now-playing-text').innerText = "🎶 Now Playing...";
       
-      // リストのハイライトを更新
       document.querySelectorAll('.playlist-item').forEach(el => el.classList.remove('active'));
       const activeLi = document.getElementById(`track-${track.added_at}`);
       if(activeLi) {
@@ -220,14 +229,12 @@
             events: {
               'onReady': (event) => event.target.playVideo(),
               'onStateChange': (event) => {
-                // 再生終了したら次の曲へ
                 if (event.data === YT.PlayerState.ENDED) {
                   currentIndex++;
                   playNext();
                 }
               },
               'onError': () => {
-                // エラー時（再生不可の動画など）はスキップ
                 currentIndex++;
                 playNext();
               }
@@ -235,15 +242,17 @@
           });
         }
       } else {
-        // MP3の場合
+        // Suno/MP3の場合
         if (ytPlayerInstance) {
           ytPlayerInstance.stopVideo();
           document.getElementById('yt-player').style.display = 'none';
         }
         audioPlayer.style.display = 'block';
-        audioPlayer.src = track.url;
+        
+        // 【追加】ここでSunoのURLを直接のMP3リンクに変換してセットする
+        audioPlayer.src = getSunoMp3Url(track.url);
+        
         audioPlayer.play().catch(e => {
-          // ブラウザ制限などで再生できなかった場合は3秒後にスキップ
           setTimeout(() => { currentIndex++; playNext(); }, 3000);
         });
         
@@ -254,20 +263,17 @@
       }
     }
 
-    // ボタンを押したらランダムスタート
     document.getElementById('play-button').addEventListener('click', () => {
       if (rawPlaylist.length === 0) return alert("曲がありません！Issueから追加してください。");
       
       document.getElementById('play-button').style.display = 'none';
       document.getElementById('media-container').style.display = 'block';
       
-      // リストをシャッフルしてスタート
       shuffledPlaylist = shuffle([...rawPlaylist]);
       currentIndex = 0;
       playNext();
     });
 
-    // 画面読み込み時にデータ取得
     document.addEventListener('DOMContentLoaded', loadPlaylist);
   </script>
 </body>
