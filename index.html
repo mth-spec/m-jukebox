@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Jukebox</title>
+  <style>
+    /* 全体背景を暗くして、文字を白くする */
+    body {
+      background-color: #121212;
+      color: #ffffff;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+
+    /* ジュークボックス風のカード枠 */
+    .jukebox-card {
+      background: #1e1e1e;
+      border: 2px solid #ff007f; /* ネオンピンクの枠線 */
+      box-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
+      border-radius: 16px;
+      padding: 24px;
+      text-align: center;
+      width: 90%;
+      max-width: 500px;
+    }
+
+    /* 「再生中」のタイトル */
+    .now-playing {
+      color: #00f3ff; /* ネオンブルー */
+      font-weight: bold;
+      font-size: 1.2rem;
+      margin-bottom: 16px;
+    }
+
+    /* --- ここから下はリスト表示用の追加スタイル --- */
+    .playlist-container {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      text-align: left;
+    }
+
+    .playlist-item {
+      background-color: #2a2a2a;
+      margin-bottom: 12px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      border-left: 4px solid #00f3ff;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .playlist-item:hover {
+      transform: translateX(4px);
+      box-shadow: -4px 0 10px rgba(0, 243, 255, 0.3);
+      border-left-color: #ff007f;
+    }
+
+    .playlist-item a {
+      color: #ffffff;
+      text-decoration: none;
+      display: block;
+      font-size: 0.95rem;
+      word-break: break-all;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+    .badge.youtube { background: #ff0000; color: #fff; }
+    .badge.suno-mp3 { background: #ff007f; color: #fff; }
+  </style>
+</head>
+<body>
+
+  <div class="jukebox-card">
+    <div class="now-playing">🎵 Jukebox Playlist 🎵</div>
+    <ul id="playlist" class="playlist-container">
+      <!-- ここにJavaScriptで曲データが追加されます -->
+      <li style="text-align:center; color:#888;">Now Loading...</li>
+    </ul>
+  </div>
+
+  <script>
+    // GitHub Actionsで作成した playlist.json を読み込む
+    async function loadPlaylist() {
+      const playlistElement = document.getElementById('playlist');
+      
+      try {
+        // キャッシュを防ぐためにタイムスタンプを付与
+        const response = await fetch(`playlist.json?t=${new Date().getTime()}`);
+        if (!response.ok) throw new Error('Network response was not ok');
+        
+        const data = await response.json();
+        playlistElement.innerHTML = ''; // Loadingの文字を消す
+
+        if (data.length === 0) {
+          playlistElement.innerHTML = '<li style="text-align:center; color:#888;">No tracks found</li>';
+          return;
+        }
+
+        // 新しい曲が上に来るように逆順でループ
+        data.reverse().forEach(track => {
+          const li = document.createElement('li');
+          li.className = 'playlist-item';
+          
+          const badgeClass = track.type === 'youtube' ? 'youtube' : 'suno-mp3';
+          const badgeText = track.type === 'youtube' ? 'YouTube' : 'Suno/MP3';
+
+          li.innerHTML = `
+            <span class="badge ${badgeClass}">${badgeText}</span>
+            <a href="${track.url}" target="_blank" rel="noopener noreferrer">${track.url}</a>
+          `;
+          
+          playlistElement.appendChild(li);
+        });
+
+      } catch (error) {
+        console.error('Error fetching playlist:', error);
+        playlistElement.innerHTML = '<li style="text-align:center; color:#ff007f;">Error loading playlist.</li>';
+      }
+    }
+
+    // 画面が読み込まれたら実行
+    document.addEventListener('DOMContentLoaded', loadPlaylist);
+  </script>
+
+</body>
+</html>
