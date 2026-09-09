@@ -30,15 +30,15 @@
     "issue_number": 10
   },
   {
-    "url": "https://github.com/user-attachments/files/31890556/Pink.Sandals.Destiny.mp3)",
-    "type": "unknown",
+    "url": "https://github.com/user-attachments/files/31890556/Pink.Sandals.Destiny.mp3",
+    "type": "suno-mp3",
     "added_at": "2026-09-06T23:06:40.992Z",
     "issue_number": 11
   },
   {
-    "url": "https://github.com/user-attachments/files/31981276/Fringe.Drop.mp3)",
-    "type": "unknown",
-    "added_at": "2026-09-08T23:56:41.413Z",
-    "issue_number": 12
-  }
+  "url": "https://github.com/user-attachments/files/31981276/Fringe.Drop.mp3",
+  "type": "suno-mp3",
+  "added_at": "2026-09-08T23:56:41.413Z",
+  "issue_number": 12
+}
 ]
